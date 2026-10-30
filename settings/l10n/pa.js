@@ -1,0 +1,20 @@
+OC.L10N.register(
+    "settings",
+    {
+    "Delete" : "ਹਟਾਓ",
+    "Share" : "ਸਾਂਝਾ ਕਰੋ",
+    "Language changed" : "ਭਾਸ਼ਾ ਬਦਲੀ",
+    "Please wait...." : "...ਉਡੀਕੋ ਜੀ",
+    "Disable" : "ਬੰਦ",
+    "Enable" : "ਚਾਲੂ",
+    "Groups" : "ਗਰੁੱਪ",
+    "unknown" : "ਅਣਜਾਣ",
+    "Sharing" : "ਸਾਂਝ",
+    "Server address" : "ਸਰਵਰ ਐਡਰੈਸ",
+    "Cancel" : "ਰੱਦ ਕਰੋ",
+    "Username" : "ਯੂਜ਼ਰ-ਨਾਂ",
+    "Password" : "ਪਾਸਵਰ",
+    "Change password" : "ਪਾਸਵਰਡ ਬਦਲੋ",
+    "Settings" : "ਸੈਟਿੰਗ"
+},
+"nplurals=2; plural=(n != 1);");

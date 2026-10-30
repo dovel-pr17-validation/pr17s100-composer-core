@@ -1,0 +1,178 @@
+<?php
+/**
+ * @author Joas Schilling <nickvergessen@owncloud.com>
+ *
+ * @copyright Copyright (c) 2018, ownCloud GmbH
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
+
+namespace Tests\Core\Command\Config\App;
+
+use OC\Core\Command\Config\App\SetConfig;
+use OCP\IConfig;
+use Test\TestCase;
+
+class SetConfigTest extends TestCase {
+	/** @var \PHPUnit\Framework\MockObject\MockObject */
+	protected $config;
+
+	/** @var \PHPUnit\Framework\MockObject\MockObject */
+	protected $consoleInput;
+	/** @var \PHPUnit\Framework\MockObject\MockObject */
+	protected $consoleOutput;
+
+	/** @var \Symfony\Component\Console\Command\Command */
+	protected $command;
+
+	protected function setUp(): void {
+		parent::setUp();
+
+		$config = $this->config = $this->getMockBuilder('OCP\IConfig')
+			->disableOriginalConstructor()
+			->getMock();
+		$this->consoleInput = $this->createMock('Symfony\Component\Console\Input\InputInterface');
+		$this->consoleOutput = $this->createMock('Symfony\Component\Console\Output\OutputInterface');
+
+		/** @var \OCP\IConfig $config */
+		$this->command = new SetConfig($config);
+	}
+
+	public function providesData() {
+		return [
+			[
+				'name',
+				'newvalue',
+				true,
+				true,
+				true,
+				'info',
+			],
+			[
+				'name',
+				'newvalue',
+				false,
+				true,
+				false,
+				'comment',
+			],
+		];
+	}
+
+	/**
+	 * @dataProvider providesData
+	 *
+	 * @param string $configName
+	 * @param mixed $newValue
+	 * @param bool $configExists
+	 * @param bool $updateOnly
+	 * @param bool $updated
+	 * @param string $expectedMessage
+	 */
+	public function testSet($configName, $newValue, $configExists, $updateOnly, $updated, $expectedMessage) {
+		$this->config->expects($this->once())
+			->method('getAppKeys')
+			->with('app-name')
+			->willReturn($configExists ? [$configName] : []);
+
+		if ($updated) {
+			$this->config->expects($this->once())
+				->method('setAppValue')
+				->with('app-name', $configName, $newValue);
+		}
+
+		$this->consoleInput->expects($this->exactly(2))
+			->method('getArgument')
+			->willReturnMap([
+				['app', 'app-name'],
+				['name', $configName],
+			]);
+		$this->consoleInput->expects($this->any())
+			->method('getOption')
+			->with('value')
+			->willReturn($newValue);
+		$this->consoleInput->expects($this->any())
+			->method('hasParameterOption')
+			->with('--update-only')
+			->willReturn($updateOnly);
+
+		$this->consoleOutput->expects($this->any())
+			->method('writeln')
+			->with($this->stringContains($expectedMessage));
+
+		self::invokePrivate($this->command, 'execute', [$this->consoleInput, $this->consoleOutput]);
+	}
+
+	public function sensitiveValueProvider() {
+		return [
+			['jwt_secret', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['token', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['wopi_key', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['smtp_password', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['bind_pwd', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['user_salt', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			['api_credentials', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			// name matching is case insensitive
+			['JWT_SECRET', 'VmNz3qhMWjsxnw4rMPpFxnM7C9hg9Xw', true],
+			// harmless keys keep showing the value
+			['DocumentServerUrl', 'https://example.com/onlyoffice', false],
+			['enabled', 'yes', false],
+		];
+	}
+
+	/**
+	 * @dataProvider sensitiveValueProvider
+	 *
+	 * @param string $configName
+	 * @param string $newValue
+	 * @param bool $expectMasked
+	 */
+	public function testSensitiveValueIsNotEchoed($configName, $newValue, $expectMasked) {
+		$this->config->method('getAppKeys')
+			->with('app-name')
+			->willReturn([$configName]);
+
+		$this->consoleInput->method('getArgument')
+			->willReturnMap([
+				['app', 'app-name'],
+				['name', $configName],
+			]);
+		$this->consoleInput->method('getOption')
+			->with('value')
+			->willReturn($newValue);
+		$this->consoleInput->method('hasParameterOption')
+			->with('--update-only')
+			->willReturn(false);
+
+		$message = null;
+		$this->consoleOutput->expects($this->once())
+			->method('writeln')
+			->willReturnCallback(function ($line) use (&$message) {
+				$message = $line;
+			});
+
+		self::invokePrivate($this->command, 'execute', [$this->consoleInput, $this->consoleOutput]);
+
+		$this->assertStringContainsString($configName, $message);
+		$this->assertStringContainsString('app-name', $message);
+		if ($expectMasked) {
+			$this->assertStringNotContainsString($newValue, $message);
+			$this->assertStringContainsString(IConfig::SENSITIVE_VALUE, $message);
+		} else {
+			$this->assertStringContainsString($newValue, $message);
+			$this->assertStringNotContainsString(IConfig::SENSITIVE_VALUE, $message);
+		}
+	}
+}

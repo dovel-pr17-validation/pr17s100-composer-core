@@ -1,0 +1,19 @@
+OC.L10N.register(
+    "files_sharing",
+    {
+    "Shared by link" : "Podijeljeno putem linka",
+    "Cancel" : "Odustani",
+    "Add" : "Dodaj",
+    "Share" : "Dijeli",
+    "Pending" : "Na čekanju",
+    "Shared by" : "Dijeli",
+    "Sharing" : "Dijeljenje",
+    "Shared with %2$s" : "Podijeljen sa %2$s",
+    "Shared by %2$s" : " Podijelio %2$s",
+    "Password" : "Lozinka",
+    "Proceed" : "Nastavi",
+    "Name" : "Ime",
+    "Expiration date" : "Datum isteka",
+    "Download" : "Preuzmite"
+},
+"nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);");

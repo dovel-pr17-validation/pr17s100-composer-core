@@ -1,0 +1,21 @@
+OC.L10N.register(
+    "files_sharing",
+    {
+    "Uploading..." : "მიმდინარეობს ატვირთვა...",
+    "Cancel" : "უარყოფა",
+    "Add" : "დამატება",
+    "Share" : "გაზიარება",
+    "Pending" : "მოცდის რეჟიმში",
+    "Shared by" : "აზიარებს",
+    "Sharing" : "გაზიარება",
+    "Shared by %2$s" : "გაზიარდა %2$s –ის მიერ",
+    "This share is password-protected" : "ეს გაზიარება დაცულია პაროლით",
+    "Password" : "პაროლი",
+    "Proceed" : "გაგრძელება",
+    "No entries found in this folder" : "ამ საქაღალდეში ჩანაწერები აღმოჩენილი არაა",
+    "Name" : "სახელი",
+    "Expiration date" : "ვადის გასვლის დრო",
+    "Download" : "ჩამოტვირთვა",
+    "Direct link" : "პირდაპირი ბმული"
+},
+"nplurals=2; plural=(n!=1);");

@@ -1,0 +1,39 @@
+<?php
+/**
+ * @author Thomas Müller <thomas.mueller@tmit.eu>
+ *
+ * @copyright Copyright (c) 2018, ownCloud GmbH
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
+
+namespace OC\Preview;
+
+//.psd
+class Heic extends Bitmap {
+	/**
+	 * {@inheritDoc}
+	 */
+	public function getMimeType() {
+		return '/image\/hei(f|c)/';
+	}
+
+	protected function getImagickFormat(string $mimeType): string {
+		# image/heic and image/heif are the same container handled by the same coder
+		# module, and not every ImageMagick build registers a distinct HEIF coder - so
+		# both mime types pin HEIC rather than risk pinning a format that is absent.
+		return 'HEIC';
+	}
+}

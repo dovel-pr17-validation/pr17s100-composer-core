@@ -1,0 +1,296 @@
+<?php
+/**
+ * @author Robin McCorkell <robin@mccorkell.me.uk>
+ *
+ * @copyright Copyright (c) 2018, ownCloud GmbH
+ * @license AGPL-3.0
+ *
+ * This code is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License, version 3,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License, version 3,
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *
+ */
+namespace Test\Files\External;
+
+use OC\Files\External\StoragesBackendChecker;
+use OC\Files\External\StoragesBackendService;
+use OCP\Files\External\IStoragesBackendService;
+use OCP\Files\External\Backend\Backend;
+use PHPUnit\Framework\MockObject\MockObject;
+
+class StoragesBackendServiceTest extends \Test\TestCase {
+	/** @var StoragesBackendChecker */
+	protected $storagesBackendChecker;
+
+	protected function setUp(): void {
+		$this->storagesBackendChecker = $this->createMock(StoragesBackendChecker::class);
+		$this->storagesBackendChecker->method('isUserMountingAllowed')->willReturn(false);
+		$this->storagesBackendChecker->method('isAllowedUserBackend')->willReturn(false);
+		$this->storagesBackendChecker->method('isAllowedAdminBackend')->willReturn(true);
+	}
+
+	/**
+	 * @param string $class
+	 *
+	 * @return \OCP\Files\External\Backend\Backend|MockObject
+	 */
+	protected function getBackendMock($class) {
+		$backend = $this->getMockBuilder('\OCP\Files\External\Backend\Backend')
+			->disableOriginalConstructor()
+			->getMock();
+		$backend->method('getIdentifier')->willReturn('identifier:' . $class);
+		$backend->method('getIdentifierAliases')->willReturn(['identifier:' . $class]);
+		return $backend;
+	}
+
+	/**
+	 * @param string $class
+	 *
+	 * @return \OCP\Files\External\Auth\AuthMechanism
+	 */
+	protected function getAuthMechanismMock($class) {
+		$backend = $this->getMockBuilder('\OCP\Files\External\Auth\AuthMechanism')
+			->disableOriginalConstructor()
+			->getMock();
+		$backend->method('getIdentifier')->will($this->returnValue('identifier:'.$class));
+		$backend->method('getIdentifierAliases')->will($this->returnValue(['identifier:'.$class]));
+		return $backend;
+	}
+
+	public function testRegisterBackend() {
+		$service = new StoragesBackendService($this->storagesBackendChecker);
+
+		$backend = $this->getBackendMock('\Foo\Bar');
+
+		$backendAlias = $this->getMockBuilder('\OCP\Files\External\Backend\Backend')
+			->disableOriginalConstructor()
+			->getMock();
+		$backendAlias->method('getIdentifierAliases')
+			->willReturn(['identifier_real', 'identifier_alias']);
+		$backendAlias->method('getIdentifier')
+			->willReturn('identifier_real');
+
+		$service->registerBackend($backend);
+		$service->registerBackend($backendAlias);
+
+		$this->assertEquals($backend, $service->getBackend('identifier:\Foo\Bar'));
+		$this->assertEquals($backendAlias, $service->getBackend('identifier_real'));
+		$this->assertEquals($backendAlias, $service->getBackend('identifier_alias'));
+
+		$backends = $service->getBackends();
+		$this->assertCount(2, $backends);
+		$this->assertArrayHasKey('identifier:\Foo\Bar', $backends);
+		$this->assertArrayHasKey('identifier_real', $backends);
+		$this->assertArrayNotHasKey('identifier_alias', $backends);
+	}
+
+	public function testBackendProvider() {
+		$service = new StoragesBackendService($this->storagesBackendChecker);
+
+		$backend1 = $this->getBackendMock('\Foo\Bar');
+		$backend2 = $this->getBackendMock('\Bar\Foo');
+
+		$providerMock = $this->createMock('\OCP\Files\External\Config\IBackendProvider');
+		$providerMock->expects($this->once())
+			->method('getBackends')
+			->willReturn([$backend1, $backend2]);
+		$service->registerBackendProvider($providerMock);
+
+		$this->assertEquals($backend1, $service->getBackend('identifier:\Foo\Bar'));
+		$this->assertEquals($backend2, $service->getBackend('identifier:\Bar\Foo'));
+
+		$this->assertCount(2, $service->getBackends());
+	}
+
+	public function testAuthMechanismProvider() {
+		$service = new StoragesBackendService($this->storagesBackendChecker);
+
+		$backend1 = $this->getAuthMechanismMock('\Foo\Bar');
+		$backend2 = $this->getAuthMechanismMock('\Bar\Foo');
+
+		$providerMock = $this->createMock('\OCP\Files\External\Config\IAuthMechanismProvider');
+		$providerMock->expects($this->once())
+			->method('getAuthMechanisms')
+			->willReturn([$backend1, $backend2]);
+		$service->registerAuthMechanismProvider($providerMock);
+
+		$this->assertEquals($backend1, $service->getAuthMechanism('identifier:\Foo\Bar'));
+		$this->assertEquals($backend2, $service->getAuthMechanism('identifier:\Bar\Foo'));
+
+		$this->assertCount(2, $service->getAuthMechanisms());
+	}
+
+	public function testMultipleBackendProviders() {
+		$service = new StoragesBackendService($this->storagesBackendChecker);
+
+		$backend1a = $this->getBackendMock('\Foo\Bar');
+		$backend1b = $this->getBackendMock('\Bar\Foo');
+
+		$backend2 = $this->getBackendMock('\Dead\Beef');
+
+		$provider1Mock = $this->createMock('\OCP\Files\External\Config\IBackendProvider');
+		$provider1Mock->expects($this->once())
+			->method('getBackends')
+			->willReturn([$backend1a, $backend1b]);
+		$service->registerBackendProvider($provider1Mock);
+		$provider2Mock = $this->createMock('\OCP\Files\External\Config\IBackendProvider');
+		$provider2Mock->expects($this->once())
+			->method('getBackends')
+			->willReturn([$backend2]);
+		$service->registerBackendProvider($provider2Mock);
+
+		$this->assertEquals($backend1a, $service->getBackend('identifier:\Foo\Bar'));
+		$this->assertEquals($backend1b, $service->getBackend('identifier:\Bar\Foo'));
+		$this->assertEquals($backend2, $service->getBackend('identifier:\Dead\Beef'));
+
+		$this->assertCount(3, $service->getBackends());
+	}
+
+	public function testUserMountingBackends() {
+		$storagesBackendChecker = $this->createMock(StoragesBackendChecker::class);
+		$storagesBackendChecker->method('isUserMountingAllowed')->willReturn(true);
+		$storagesBackendChecker->method('isAllowedAdminBackend')->willReturn(true);
+		$storagesBackendChecker->method('isAllowedUserBackend')->willReturnCallback(function (Backend $backend) {
+			$backendAliases = $backend->getIdentifierAliases();
+			if (\in_array('identifier:\User\Mount\Allowed', $backendAliases, true) || \in_array('identifier_alias', $backendAliases, true)) {
+				return true;
+			}
+			return false;
+		});
+
+		$service = new StoragesBackendService($storagesBackendChecker);
+
+		$backendAllowed = $this->getBackendMock('\User\Mount\Allowed');
+		$backendAllowed->expects($this->never())
+			->method('removeVisibility');
+		$backendNotAllowed = $this->getBackendMock('\User\Mount\NotAllowed');
+		$backendNotAllowed->expects($this->once())
+			->method('removeVisibility')
+			->with(IStoragesBackendService::VISIBILITY_PERSONAL);
+
+		$backendAlias = $this->getMockBuilder('\OCP\Files\External\Backend\Backend')
+			->disableOriginalConstructor()
+			->getMock();
+		$backendAlias->method('getIdentifierAliases')
+			->willReturn(['identifier_real', 'identifier_alias']);
+		$backendAlias->expects($this->never())
+			->method('removeVisibility');
+
+		$service->registerBackend($backendAllowed);
+		$service->registerBackend($backendNotAllowed);
+		$service->registerBackend($backendAlias);
+	}
+
+	public function testAdminMountingBackends() {
+		$storagesBackendChecker = $this->createMock(StoragesBackendChecker::class);
+		$storagesBackendChecker->method('isUserMountingAllowed')->willReturn(true);
+		$storagesBackendChecker->method('isAllowedUserBackend')->willReturn(true);
+		$storagesBackendChecker->method('isAllowedAdminBackend')->willReturnCallback(function (Backend $backend) {
+			$backendAliases = $backend->getIdentifierAliases();
+			if (\in_array('identifier:\User\Mount\Allowed', $backendAliases, true) || \in_array('identifier_alias', $backendAliases, true)) {
+				return true;
+			}
+			return false;
+		});
+
+		$service = new StoragesBackendService($storagesBackendChecker);
+
+		$backendAllowed = $this->getBackendMock('\User\Mount\Allowed');
+		$backendAllowed->expects($this->never())
+			->method('removeVisibility');
+		$backendNotAllowed = $this->getBackendMock('\User\Mount\NotAllowed');
+		$backendNotAllowed->expects($this->once())
+			->method('removeVisibility')
+			->with(IStoragesBackendService::VISIBILITY_ADMIN);
+
+		$backendAlias = $this->getMockBuilder('\OCP\Files\External\Backend\Backend')
+			->disableOriginalConstructor()
+			->getMock();
+		$backendAlias->method('getIdentifierAliases')
+			->willReturn(['identifier_real', 'identifier_alias']);
+		$backendAlias->expects($this->never())
+			->method('removeVisibility');
+
+		$service->registerBackend($backendAllowed);
+		$service->registerBackend($backendNotAllowed);
+		$service->registerBackend($backendAlias);
+	}
+
+	public function testAdminAndUserMountingBackends() {
+		$storagesBackendChecker = $this->createMock(StoragesBackendChecker::class);
+		$storagesBackendChecker->method('isUserMountingAllowed')->willReturn(true);
+		$storagesBackendChecker->method('isAllowedUserBackend')->willReturnCallback(function (Backend $backend) {
+			$backendAliases = $backend->getIdentifierAliases();
+			if (\in_array('identifier:\User\Mount\Allowed', $backendAliases, true) || \in_array('identifier_alias', $backendAliases, true)) {
+				return true;
+			}
+			return false;
+		});
+		$storagesBackendChecker->method('isAllowedAdminBackend')->willReturnCallback(function (Backend $backend) {
+			$backendAliases = $backend->getIdentifierAliases();
+			if (\in_array('identifier:\User\Mount\Allowed', $backendAliases, true) || \in_array('identifier_alias', $backendAliases, true)) {
+				return true;
+			}
+			return false;
+		});
+
+		$service = new StoragesBackendService($storagesBackendChecker);
+
+		$backendAllowed = $this->getBackendMock('\User\Mount\Allowed');
+		$backendAllowed->expects($this->never())
+			->method('removeVisibility');
+		$backendNotAllowed = $this->getBackendMock('\User\Mount\NotAllowed');
+		$backendNotAllowed->expects($this->exactly(2))
+			->method('removeVisibility')
+			->with(
+				$this->logicalOr(
+					$this->identicalTo(IStoragesBackendService::VISIBILITY_ADMIN),
+					$this->identicalTo(IStoragesBackendService::VISIBILITY_PERSONAL)
+				)
+			);
+
+		$backendAlias = $this->getMockBuilder('\OCP\Files\External\Backend\Backend')
+			->disableOriginalConstructor()
+			->getMock();
+		$backendAlias->method('getIdentifierAliases')
+			->willReturn(['identifier_real', 'identifier_alias']);
+		$backendAlias->expects($this->never())
+			->method('removeVisibility');
+
+		$service->registerBackend($backendAllowed);
+		$service->registerBackend($backendNotAllowed);
+		$service->registerBackend($backendAlias);
+	}
+
+	public function testGetAvailableBackends() {
+		$service = new StoragesBackendService($this->storagesBackendChecker);
+
+		$backendAvailable = $this->getBackendMock('\Backend\Available');
+		$backendAvailable->expects($this->once())
+			->method('checkDependencies')
+			->will($this->returnValue([]));
+		$backendNotAvailable = $this->getBackendMock('\Backend\NotAvailable');
+		$backendNotAvailable->expects($this->once())
+			->method('checkDependencies')
+			->will($this->returnValue([
+				$this->getMockBuilder('\OC\Files\External\MissingDependency')
+					->disableOriginalConstructor()
+					->getMock()
+			]));
+
+		$service->registerBackend($backendAvailable);
+		$service->registerBackend($backendNotAvailable);
+
+		$availableBackends = $service->getAvailableBackends();
+		$this->assertArrayHasKey('identifier:\Backend\Available', $availableBackends);
+		$this->assertArrayNotHasKey('identifier:\Backend\NotAvailable', $availableBackends);
+	}
+}
